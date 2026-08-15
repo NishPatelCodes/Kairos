@@ -1,0 +1,40 @@
+# Environment
+.env
+.env.local
+*.local
+
+# Python
+backend/.venv/
+backend/venv/
+**/__pycache__/
+*.py[cod]
+*.sqlite3
+backend/media/
+backend/staticfiles/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# Node
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+postgres_data/
+
+# Deploy
+.vercel
+.railway
+
+# Cursor clone artifacts
+9680714bad40503ef37a9f815fd1d2cd15150af4/
