@@ -22,10 +22,12 @@ ALLOWED_TOOLS = {
     "get_recent_activity",
     "get_free_slots",
     "create_schedule_item",
+    "apply_day_plan",
     "update_schedule_item",
     "delete_schedule_item",
     "move_schedule_item",
     "complete_task",
+    "increment_goal_progress",
     "create_goal",
     "update_goal",
     "update_preferences",
@@ -179,6 +181,25 @@ class ToolExecutor:
         )
         return _ok(ScheduleItemSerializer(item).data, ui=_item_ui(item))
 
+    def apply_day_plan(self, user, args):
+        blocks = args.get("items") or []
+        if not isinstance(blocks, list) or not blocks:
+            return _err("items must be a non-empty list of schedule blocks.")
+        for block in blocks:
+            if block.get("goal_id"):
+                _own_monthly(user, block["goal_id"])
+        created = engine.apply_day_plan(
+            user,
+            parse_date(args.get("date"), user),
+            blocks,
+            keep_completed=True,
+        )
+        data = ScheduleItemSerializer(created, many=True).data
+        return _ok(
+            {"replaced": True, "items": data},
+            ui={"type": "schedule_plan", "items": data},
+        )
+
     def update_schedule_item(self, user, args):
         item = _own_item(user, args.get("id"))
         fields = {}
@@ -219,8 +240,49 @@ class ToolExecutor:
 
     def complete_task(self, user, args):
         item = _own_item(user, args.get("id"))
-        done = engine.complete(user, item.id)
-        return _ok(ScheduleItemSerializer(done).data, ui=_item_ui(done))
+        amount = args.get("progress_amount")
+        if amount is not None:
+            try:
+                amount = float(amount)
+            except (TypeError, ValueError):
+                return _err("progress_amount must be a number.")
+        goal_id = args.get("goal_id")
+        if goal_id not in (None, ""):
+            try:
+                goal_id = int(goal_id)
+            except (TypeError, ValueError):
+                return _err("goal_id must be an integer.")
+        else:
+            goal_id = None
+        done = engine.complete(user, item.id, progress_amount=amount, goal_id=goal_id)
+        payload = ScheduleItemSerializer(done).data
+        if done.monthly_goal_id:
+            payload["goal_progress"] = {
+                "id": done.monthly_goal_id,
+                "title": done.monthly_goal.title if done.monthly_goal else None,
+                "metric_current": done.monthly_goal.metric_current if done.monthly_goal else None,
+                "metric_target": done.monthly_goal.metric_target if done.monthly_goal else None,
+                "progress_pct": done.monthly_goal.progress_pct if done.monthly_goal else None,
+            }
+        return _ok(payload, ui=_item_ui(done))
+
+    def increment_goal_progress(self, user, args):
+        goal = _own_monthly(user, args.get("goal_id"))
+        try:
+            amount = float(args.get("amount"))
+        except (TypeError, ValueError):
+            return _err("amount must be a number.")
+        updated = engine.increment_goal(user, goal.id, amount)
+        return _ok(
+            {
+                "id": updated.id,
+                "title": updated.title,
+                "metric_current": updated.metric_current,
+                "metric_target": updated.metric_target,
+                "metric_unit": updated.metric_unit,
+                "progress_pct": updated.progress_pct,
+            }
+        )
 
     def create_goal(self, user, args):
         level = args.get("level")

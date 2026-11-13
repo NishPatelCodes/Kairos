@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 
+import { GoalProgressControl } from "@/components/goals/GoalProgressControl";
 import { formatMinutes } from "@/lib/utils";
 import type { AnnualGoal, DailyProgress, MonthlyGoal } from "@/types";
 
@@ -7,10 +8,12 @@ export function ContextPanel({
   annual,
   monthly,
   daily,
+  onGoalChange,
 }: {
   annual?: AnnualGoal;
   monthly: MonthlyGoal[];
   daily?: DailyProgress;
+  onGoalChange?: () => void;
 }) {
   return (
     <div className="space-y-8">
@@ -51,6 +54,11 @@ export function ContextPanel({
                   style={{ width: `${Math.min(100, goal.progress_pct || 0)}%` }}
                 />
               </div>
+              {goal.metric_target != null && (
+                <div className="mt-2">
+                  <GoalProgressControl goal={goal} compact onSaved={onGoalChange} />
+                </div>
+              )}
             </div>
           ))}
         </div>

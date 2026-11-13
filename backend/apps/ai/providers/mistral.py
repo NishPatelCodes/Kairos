@@ -37,7 +37,7 @@ class MistralProvider(AIProvider):
         if not self.api_key:
             raise RuntimeError("MISTRAL_API_KEY is not configured.")
         if self._client is None:
-            from mistralai import Mistral
+            from mistralai.client import Mistral
 
             self._client = Mistral(api_key=self.api_key)
         return self._client

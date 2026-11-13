@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 
 import { ChatPanel } from "@/components/chat/ChatPanel";
 import { ContextPanel } from "@/components/context/ContextPanel";
+import { ResizableToday } from "@/components/layout/ResizableToday";
 import { ScheduleTimeline } from "@/components/schedule/ScheduleTimeline";
 import { Skeleton } from "@/components/ui/skeleton";
 import { api, streamChat } from "@/lib/api";
@@ -71,9 +72,7 @@ export function TodayPage() {
       content: text,
     };
     queryClient.setQueryData<Conversation>(["conversation"], (current) =>
-      current
-        ? { ...current, messages: [...current.messages, optimistic] }
-        : current,
+      current ? { ...current, messages: [...current.messages, optimistic] } : current,
     );
     setBusy(true);
     setStreaming("");
@@ -87,7 +86,7 @@ export function TodayPage() {
         if (event === "done") {
           setStreaming("");
           queryClient.invalidateQueries({ queryKey: ["conversation"] });
-          if (data.schedule_changed || data.goals_changed) refreshAll();
+          refreshAll();
         }
         if (event === "error" && !acc) {
           setStreaming("");
@@ -131,38 +130,43 @@ export function TodayPage() {
 
       <div className="max-h-56 shrink-0 overflow-y-auto border-b border-line px-6 py-4 lg:hidden">
         <div className="mb-3 text-[11px] uppercase tracking-[0.18em] text-ink-faint">Today's schedule</div>
-        <ScheduleTimeline items={schedule.data ?? []} onChange={refreshAll} />
+        <ScheduleTimeline items={schedule.data ?? []} monthly={monthly.data ?? []} onChange={refreshAll} />
       </div>
 
-      <div className="grid min-h-0 flex-1 lg:grid-cols-[280px_minmax(0,1fr)] xl:grid-cols-[300px_minmax(0,1fr)_320px]">
-        <section className="hidden min-h-0 overflow-y-auto border-r border-line p-6 lg:block">
-          <div className="mb-5 text-[11px] uppercase tracking-[0.18em] text-ink-faint">Today's schedule</div>
-          {schedule.isLoading ? (
-            <div className="space-y-4">
-              <Skeleton className="h-14" />
-              <Skeleton className="h-14" />
-              <Skeleton className="h-14" />
-            </div>
-          ) : (
-            <ScheduleTimeline items={schedule.data ?? []} onChange={refreshAll} />
-          )}
-        </section>
-
-        <section className="min-h-0 border-r border-line">
-          {loading ? (
+      <ResizableToday
+        schedule={
+          <>
+            <div className="mb-5 text-[11px] uppercase tracking-[0.18em] text-ink-faint">Today's schedule</div>
+            {schedule.isLoading ? (
+              <div className="space-y-4">
+                <Skeleton className="h-14" />
+                <Skeleton className="h-14" />
+                <Skeleton className="h-14" />
+              </div>
+            ) : (
+              <ScheduleTimeline items={schedule.data ?? []} monthly={monthly.data ?? []} onChange={refreshAll} />
+            )}
+          </>
+        }
+        chat={
+          loading ? (
             <div className="space-y-4 p-8">
               <Skeleton className="h-24" />
               <Skeleton className="h-16" />
             </div>
           ) : (
             <ChatPanel messages={messages} streaming={streaming} busy={busy} onSend={send} />
-          )}
-        </section>
-
-        <section className="hidden min-h-0 overflow-y-auto p-6 xl:block">
-          <ContextPanel annual={activeAnnual} monthly={monthly.data ?? []} daily={daily.data} />
-        </section>
-      </div>
+          )
+        }
+        context={
+          <ContextPanel
+            annual={activeAnnual}
+            monthly={monthly.data ?? []}
+            daily={daily.data}
+            onGoalChange={refreshAll}
+          />
+        }
+      />
     </div>
   );
 }

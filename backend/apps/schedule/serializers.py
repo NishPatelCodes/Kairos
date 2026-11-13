@@ -7,6 +7,9 @@ from .models import ScheduleItem
 class ScheduleItemSerializer(serializers.ModelSerializer):
     duration_minutes = serializers.IntegerField(read_only=True)
     goal_title = serializers.CharField(source="monthly_goal.title", read_only=True, default=None)
+    goal_metric_unit = serializers.CharField(source="monthly_goal.metric_unit", read_only=True, default=None)
+    goal_metric_target = serializers.FloatField(source="monthly_goal.metric_target", read_only=True, default=None)
+    goal_metric_current = serializers.FloatField(source="monthly_goal.metric_current", read_only=True, default=None)
 
     class Meta:
         model = ScheduleItem
@@ -14,6 +17,9 @@ class ScheduleItemSerializer(serializers.ModelSerializer):
             "id",
             "monthly_goal",
             "goal_title",
+            "goal_metric_unit",
+            "goal_metric_target",
+            "goal_metric_current",
             "title",
             "notes",
             "date",
@@ -28,7 +34,17 @@ class ScheduleItemSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         )
-        read_only_fields = ("id", "completed_at", "created_at", "updated_at", "duration_minutes", "goal_title")
+        read_only_fields = (
+            "id",
+            "completed_at",
+            "created_at",
+            "updated_at",
+            "duration_minutes",
+            "goal_title",
+            "goal_metric_unit",
+            "goal_metric_target",
+            "goal_metric_current",
+        )
 
     def validate(self, attrs):
         start = attrs.get("start_time") or getattr(self.instance, "start_time", None)

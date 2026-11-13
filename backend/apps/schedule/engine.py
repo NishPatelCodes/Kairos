@@ -39,7 +39,9 @@ class ScheduleEngine:
     """Deterministic scheduling. The LLM never writes directly to the database."""
 
     def overlapping(self, user, day: date, start: time, end: time, exclude_id: Optional[int] = None):
-        qs = ScheduleItem.objects.filter(user=user, date=day).exclude(status="rescheduled")
+        qs = ScheduleItem.objects.filter(user=user, date=day).exclude(
+            status__in=["rescheduled", "completed"]
+        )
         if exclude_id:
             qs = qs.exclude(pk=exclude_id)
         conflicts = []
@@ -216,21 +218,150 @@ class ScheduleEngine:
         if not deleted:
             raise ValidationError({"id": "Schedule item not found."})
 
-    def complete(self, user, item_id: int) -> ScheduleItem:
-        item = ScheduleItem.objects.filter(user=user, pk=item_id).first()
+    def complete(
+        self,
+        user,
+        item_id: int,
+        progress_amount: float | None = None,
+        goal_id: int | None = None,
+    ) -> ScheduleItem:
+        item = ScheduleItem.objects.filter(user=user, pk=item_id).select_related("monthly_goal").first()
         if not item:
             raise ValidationError({"id": "Schedule item not found."})
         item.status = "completed"
         item.completed_at = timezone.now()
-        item.save(update_fields=["status", "completed_at", "updated_at"])
-        if item.monthly_goal_id and item.monthly_goal and item.monthly_goal.metric_target:
-            goal = item.monthly_goal
-            # Increment by 1 unit when a related block is completed, unless notes specify otherwise.
-            goal.metric_current = (goal.metric_current or 0) + 1
+        fields = ["status", "completed_at", "updated_at"]
+        if goal_id and not item.monthly_goal_id:
+            from apps.goals.models import MonthlyGoal
+
+            goal = MonthlyGoal.objects.filter(user=user, pk=goal_id).first()
+            if goal:
+                item.monthly_goal_id = goal.id
+                fields.append("monthly_goal")
+        item.save(update_fields=fields)
+        item = ScheduleItem.objects.select_related("monthly_goal").get(pk=item.pk)
+        goal = item.monthly_goal
+        if progress_amount is not None and goal and goal.metric_target:
+            goal.metric_current = (goal.metric_current or 0) + float(progress_amount)
             if goal.metric_current >= goal.metric_target:
                 goal.status = "completed"
             goal.save(update_fields=["metric_current", "status", "updated_at"])
         return item
+
+    def increment_goal(self, user, goal_id: int, amount: float) -> object:
+        from apps.goals.models import MonthlyGoal
+
+        goal = MonthlyGoal.objects.filter(user=user, pk=goal_id).first()
+        if not goal:
+            raise ValidationError({"id": "Monthly goal not found."})
+        goal.metric_current = (goal.metric_current or 0) + float(amount)
+        if goal.metric_target and goal.metric_current >= goal.metric_target:
+            goal.status = "completed"
+        goal.save(update_fields=["metric_current", "status", "updated_at"])
+        return goal
+
+    @transaction.atomic
+    def apply_day_plan(self, user, day: date, blocks: list[dict], keep_completed: bool = True):
+        """Replace remaining items for a day with an explicit plan. Completed blocks stay."""
+        existing = list(ScheduleItem.objects.filter(user=user, date=day).exclude(status="rescheduled"))
+        keep = [i for i in existing if keep_completed and i.status == "completed"]
+        outgoing = [i for i in existing if i not in keep]
+
+        parsed: list[dict] = []
+        for raw in blocks:
+            title = (raw.get("title") or "").strip()
+            if not title:
+                raise ValidationError({"title": "Each block needs a title."})
+            start = parse_time(str(raw.get("start_time")))
+            end = parse_time(str(raw.get("end_time")))
+            start_m, end_m = _to_minutes(start), _to_minutes(end)
+            if end_m <= start_m:
+                raise ValidationError({"end_time": f"{title}: end time must be after start."})
+            parsed.append(
+                {
+                    "title": title,
+                    "start": start,
+                    "end": end,
+                    "start_m": start_m,
+                    "end_m": end_m,
+                    "kind": raw.get("kind") or ("break" if "break" in title.lower() else "focus"),
+                    "notes": raw.get("notes") or "",
+                    "goal_id": raw.get("goal_id") or raw.get("monthly_goal"),
+                    "is_fixed": bool(raw.get("is_fixed")),
+                }
+            )
+
+        parsed.sort(key=lambda b: b["start_m"])
+        for i, block in enumerate(parsed):
+            if i > 0 and block["start_m"] < parsed[i - 1]["end_m"]:
+                raise ValidationError(
+                    {
+                        "conflict": f"{parsed[i - 1]['title']} overlaps {block['title']} in the new plan."
+                    }
+                )
+            for kept in keep:
+                other_s, other_e = _to_minutes(kept.start_time), _to_minutes(kept.end_time)
+                if block["start_m"] < other_e and block["end_m"] > other_s:
+                    raise ValidationError(
+                        {
+                            "conflict": (
+                                f"{block['title']} overlaps completed "
+                                f"{kept.title} ({kept.start_time.strftime('%H:%M')}–{kept.end_time.strftime('%H:%M')})."
+                            )
+                        }
+                    )
+
+        title_to_goal = {}
+        for item in outgoing:
+            if item.monthly_goal_id:
+                title_to_goal[item.title.strip().lower()] = item.monthly_goal_id
+
+        from apps.goals.models import MonthlyGoal
+
+        month = day.replace(day=1)
+        monthly = list(MonthlyGoal.objects.filter(user=user, month=month))
+
+        def infer_goal(title: str, explicit):
+            if explicit:
+                return explicit
+            hit = title_to_goal.get(title.strip().lower())
+            if hit:
+                return hit
+            lowered = title.lower()
+            for goal in monthly:
+                name = goal.title.lower()
+                if name in lowered or lowered in name:
+                    return goal.id
+            return None
+
+        for item in outgoing:
+            item.delete()
+
+        created = []
+        for block in parsed:
+            goal_id = infer_goal(block["title"], block["goal_id"])
+            created.append(
+                ScheduleItem.objects.create(
+                    user=user,
+                    title=block["title"],
+                    date=day,
+                    start_time=block["start"],
+                    end_time=block["end"],
+                    monthly_goal_id=goal_id,
+                    notes=block["notes"],
+                    kind=block["kind"] if block["kind"] in dict(ScheduleItem.KIND_CHOICES) else "focus",
+                    is_fixed=block["is_fixed"],
+                    created_by="ai",
+                    status="upcoming",
+                )
+            )
+        self.refresh_statuses(user, day)
+        ids = [item.id for item in created]
+        return list(
+            ScheduleItem.objects.filter(pk__in=ids)
+            .select_related("monthly_goal")
+            .order_by("start_time")
+        )
 
 
 engine = ScheduleEngine()

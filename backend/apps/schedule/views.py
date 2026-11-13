@@ -41,7 +41,17 @@ class ScheduleDetailView(APIView):
 
 class CompleteScheduleView(APIView):
     def post(self, request, pk: int):
-        item = engine.complete(request.user, pk)
+        amount = request.data.get("progress_amount") if isinstance(request.data, dict) else None
+        goal_id = request.data.get("goal_id") if isinstance(request.data, dict) else None
+        if amount is not None and amount != "":
+            amount = float(amount)
+        else:
+            amount = None
+        if goal_id not in (None, ""):
+            goal_id = int(goal_id)
+        else:
+            goal_id = None
+        item = engine.complete(request.user, pk, progress_amount=amount, goal_id=goal_id)
         return Response(ScheduleItemSerializer(item).data)
 
 

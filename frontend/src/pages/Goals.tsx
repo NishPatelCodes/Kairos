@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 
+import { GoalProgressControl } from "@/components/goals/GoalProgressControl";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { api } from "@/lib/api";
@@ -24,6 +25,7 @@ export function GoalsPage() {
         <h1 className="mt-2 font-serif text-4xl">Goals</h1>
         <p className="mt-3 max-w-xl text-sm text-ink-muted">
           Daily work should roll up. Tasks feed the month. The month feeds the year.
+          Adjust counts directly when a session finishes.
         </p>
 
         {annual.isLoading ? (
@@ -51,7 +53,7 @@ export function GoalsPage() {
           {(monthly.data ?? []).map((goal) => (
             <Card key={goal.id} className="p-5">
               <div className="flex items-start justify-between gap-4">
-                <div>
+                <div className="min-w-0">
                   <h3 className="text-base text-ink">{goal.title}</h3>
                   {goal.description && (
                     <p className="mt-1 text-sm text-ink-muted">{goal.description}</p>
@@ -66,11 +68,9 @@ export function GoalsPage() {
                   <div className="tabular-nums text-lg text-ink">
                     {goal.progress_pct != null ? `${Math.round(goal.progress_pct)}%` : "—"}
                   </div>
-                  {goal.metric_target != null && (
-                    <div className="text-xs text-ink-faint">
-                      {goal.metric_current}/{goal.metric_target} {goal.metric_unit}
-                    </div>
-                  )}
+                  <div className="mt-2 flex justify-end">
+                    <GoalProgressControl goal={goal} />
+                  </div>
                 </div>
               </div>
               <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-white/5">

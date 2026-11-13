@@ -44,6 +44,9 @@ export type ScheduleItem = {
   id: number;
   monthly_goal: number | null;
   goal_title: string | null;
+  goal_metric_unit: string | null;
+  goal_metric_target: number | null;
+  goal_metric_current: number | null;
   title: string;
   notes: string;
   date: string;
@@ -61,7 +64,7 @@ export type ChatMessage = {
   role: "user" | "assistant" | "system";
   content: string;
   metadata?: {
-    blocks?: Array<{ type: string; item?: ScheduleItem }>;
+    blocks?: Array<{ type: string; item?: ScheduleItem; items?: ScheduleItem[] }>;
     tools?: string[];
   };
   created_at?: string;

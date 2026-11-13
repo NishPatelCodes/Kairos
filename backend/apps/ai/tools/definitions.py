@@ -88,6 +88,42 @@ TOOLS: list[dict] = [
     {
         "type": "function",
         "function": {
+            "name": "apply_day_plan",
+            "description": (
+                "Atomically replace today's remaining schedule with this exact plan. "
+                "Completed items are kept. Use this whenever the user approves a reschedule "
+                "or pastes a full plan. Do not create/move items one-by-one for a full plan."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "date": {"type": "string", "description": "YYYY-MM-DD. Omit for today."},
+                    "items": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "title": {"type": "string"},
+                                "start_time": {"type": "string", "description": "HH:MM 24-hour"},
+                                "end_time": {"type": "string", "description": "HH:MM 24-hour"},
+                                "kind": {
+                                    "type": "string",
+                                    "enum": ["focus", "break", "fixed", "habit", "flexible"],
+                                },
+                                "goal_id": {"type": "integer"},
+                                "notes": {"type": "string"},
+                            },
+                            "required": ["title", "start_time", "end_time"],
+                        },
+                    },
+                },
+                "required": ["items"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "update_schedule_item",
             "description": "Update an existing schedule item by id.",
             "parameters": {
@@ -142,11 +178,42 @@ TOOLS: list[dict] = [
         "type": "function",
         "function": {
             "name": "complete_task",
-            "description": "Mark a schedule item completed. Increments related monthly goal progress when applicable.",
+            "description": (
+                "Mark a schedule item completed. Pass progress_amount when the user reports "
+                "how many units they finished (e.g. 2 problems). Do not invent a number."
+            ),
             "parameters": {
                 "type": "object",
-                "properties": {"id": {"type": "integer"}},
+                "properties": {
+                    "id": {"type": "integer"},
+                    "progress_amount": {
+                        "type": "number",
+                        "description": "Units to add to the linked monthly goal (problems, modules, chapters).",
+                    },
+                    "goal_id": {
+                        "type": "integer",
+                        "description": "Monthly goal to increment if the block is not already linked.",
+                    },
+                },
                 "required": ["id"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "increment_goal_progress",
+            "description": (
+                "Add units to a monthly goal (e.g. +2 NeetCode problems). "
+                "Use when the user reports progress even if they do not complete a calendar block."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "goal_id": {"type": "integer"},
+                    "amount": {"type": "number"},
+                },
+                "required": ["goal_id", "amount"],
             },
         },
     },

@@ -1,7 +1,11 @@
-# Environment
+# Environment and secrets (only .env.example files are committed)
 .env
-.env.local
+.env.*
+!.env.example
 *.local
+*.pem
+*.key
+*.log
 
 # Python
 backend/.venv/

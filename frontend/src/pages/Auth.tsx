@@ -130,7 +130,15 @@ function AuthFrame({
     <div className="flex min-h-full items-center justify-center bg-bg px-4">
       <div className="w-full max-w-[420px]">
         <div className="mb-10 text-center">
-          <img src="/logo.svg" alt="" className="mx-auto mb-5 h-12 w-12 rounded-xl" />
+          <img
+            src="/logo-256.png"
+            srcSet="/logo-256.png 256w, /logo.png 2000w"
+            sizes="48px"
+            alt=""
+            width={48}
+            height={48}
+            className="mx-auto mb-5 h-12 w-12 rounded-xl object-cover"
+          />
           <div className="mb-6 text-[12px] tracking-[0.28em] text-gold">KAIROS</div>
           <h1 className="font-serif text-4xl text-ink">{title}</h1>
           <p className="mt-3 text-sm text-ink-muted">{subtitle}</p>

@@ -59,3 +59,11 @@ class MonthlyGoalSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         validated_data["user"] = self.context["request"].user
         return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        instance = super().update(instance, validated_data)
+        if instance.metric_target and (instance.metric_current or 0) >= instance.metric_target:
+            if instance.status != "completed":
+                instance.status = "completed"
+                instance.save(update_fields=["status", "updated_at"])
+        return instance

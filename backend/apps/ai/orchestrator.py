@@ -111,13 +111,17 @@ class Orchestrator:
                     final_text += chunk
                     yield {"event": "token", "data": {"content": chunk}}
         except Exception as exc:
+            detail = str(exc).strip() or type(exc).__name__
             if not final_text:
-                final_text = (
-                    "I couldn't reach the model just now. "
-                    "Add your MISTRAL_API_KEY to `.env` and restart the backend, then try again."
-                )
+                if "MISTRAL_API_KEY" in detail:
+                    final_text = (
+                        "I couldn't reach the model because MISTRAL_API_KEY is missing. "
+                        "Add it to `.env` and restart the backend."
+                    )
+                else:
+                    final_text = f"I couldn't reach the model just now. {detail}"
             yield {"event": "token", "data": {"content": final_text}}
-            yield {"event": "error", "data": {"message": str(exc)}}
+            yield {"event": "error", "data": {"message": detail}}
 
         assistant = Message.objects.create(
             conversation=conversation,
@@ -136,13 +140,23 @@ class Orchestrator:
                     t in tools_used
                     for t in {
                         "create_schedule_item",
+                        "apply_day_plan",
                         "update_schedule_item",
                         "delete_schedule_item",
                         "move_schedule_item",
                         "complete_task",
                     }
                 ),
-                "goals_changed": any(t in tools_used for t in {"create_goal", "update_goal", "update_preferences"}),
+                "goals_changed": any(
+                    t in tools_used
+                    for t in {
+                        "create_goal",
+                        "update_goal",
+                        "increment_goal_progress",
+                        "complete_task",
+                        "update_preferences",
+                    }
+                ),
             },
         }
 

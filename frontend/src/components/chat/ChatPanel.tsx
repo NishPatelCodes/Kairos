@@ -99,9 +99,19 @@ function MessageBubble({ message }: { message: ChatMessage }) {
             <Markdown remarkPlugins={[remarkGfm]}>{message.content}</Markdown>
           </div>
         )}
-        {message.metadata?.blocks?.map((block, index) =>
-          block.item ? <ScheduleCard key={`${message.id}-${index}`} item={block.item} /> : null,
-        )}
+        {message.metadata?.blocks?.map((block, index) => {
+          if (block.item) return <ScheduleCard key={`${message.id}-${index}`} item={block.item} />;
+          if (block.items?.length) {
+            return (
+              <div key={`${message.id}-${index}`} className="mt-3 space-y-2">
+                {block.items.map((item) => (
+                  <ScheduleCard key={item.id} item={item} />
+                ))}
+              </div>
+            );
+          }
+          return null;
+        })}
       </div>
     </div>
   );
